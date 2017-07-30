@@ -140,6 +140,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
     private static final long FLOWSET_MASK = ((1L << FLOWSET_BITS) - 1) << FLOWSET_SHIFT;
     private static final long FLOWSET_MAX = (long) (Math.pow(2, FLOWSET_BITS) - 1);
     protected static FlowSetIdRegistry flowSetIdRegistry;
+    private static int roundChoose = 1;
     
     public static HashMap<String, Integer> btree = new HashMap<String, Integer>();
 
@@ -274,7 +275,8 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
                 } else {
                 	return this.processPacketInMessage(sw, (OFPacketIn) msg, decision, cntx, 1);                	
                 }
-                if (!Forwarding.btree.containsKey(key)) {
+                roundChoose = 1 - roundChoose;
+                if (!Forwarding.btree.containsKey(key) && roundChoose == 1) {
                 	btree.put(key, 1);
                 	log.debug("###### CACHE ADDED-----------");
                 	return Command.STOP;
