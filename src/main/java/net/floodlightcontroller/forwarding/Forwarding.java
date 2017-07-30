@@ -287,7 +287,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
             	try {
             		OFFlowRemoved flowRemoved = (OFFlowRemoved) msg;
             		IPv4Address ip = flowRemoved.getMatch().get(MatchField.IPV4_SRC);
-                    log.info("###### PACKET_REMOVED - {};", ip.toString());
+                    log.debug("###### PACKET_REMOVED - {};", ip.toString());
             	} catch (Exception e) {
             		log.info("$$$$$$$$$$$");
             	}
