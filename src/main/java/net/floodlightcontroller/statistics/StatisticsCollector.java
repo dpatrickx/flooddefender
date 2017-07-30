@@ -16,8 +16,12 @@ import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.statistics.StatisticsCollector.HostStatsCollector;
 import net.floodlightcontroller.statistics.web.SwitchStatisticsWebRoutable;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
+import net.floodlightcontroller.util.MatchUtils;
+import net.floodlightcontroller.util.OFMessageDamper;
+
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstructionGotoTable;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
@@ -52,8 +56,9 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 	// flow entries statistic collecting configuration
 	private static boolean isEnabled = true;
-	public static int hostStatsInterval = 2;
+	public static int hostStatsInterval = 3;
 	public static int roundJudge = 0;
+	protected OFMessageDamper messageDamper;
 	private static ScheduledFuture<?> hostStatsCollector;
 	public static HashMap<Match, ActionEntry> matchCache = new HashMap<Match, ActionEntry>();
 	private int collectTime;
@@ -63,7 +68,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	public class HostStatsCollector implements Runnable {
 		@Override
 		public void run() {
-			log.info("===============STATISTICS COLLECTED===============");
+//			log.info("===============STATISTICS COLLECTED===============");
 			Map<DatapathId, List<OFStatsReply>> replies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
 
 			try {
@@ -115,19 +120,25 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 				                Set<OFFlowModFlags> flags = new HashSet<>();
 				                flags.add(OFFlowModFlags.SEND_FLOW_REM);
 
+				                List<OFAction> actions = new ArrayList<OFAction>();	
+				                OFActionOutput.Builder aob = ofSwitch.getOFFactory().actions().buildOutput();
+				                aob.setPort(port);
+				                aob.setMaxLen(Integer.MAX_VALUE);
+				                actions.add(aob.build());
+				                
 								OFFlowAdd fmb = ofSwitch.getOFFactory().buildFlowAdd()
 								.setMatch(match)
 					            .setIdleTimeout(5)
 					            .setHardTimeout(Forwarding.FLOWMOD_DEFAULT_HARD_TIMEOUT)
 					            .setBufferId(OFBufferId.NO_BUFFER)
 					            .setCookie(pse.getCookie())
+					            .setActions(actions)
 					            .setOutPort(port)
 					            .setTableId(TableId.of(0))
 					            .setPriority(3)
 					            .setFlags(flags)
 					            .build();
-
-								ofSwitch.write(fmb);
+								messageDamper.write(ofSwitch, fmb);
 							}
 						}
 					}
@@ -137,6 +148,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 				// entries judgment finished
 				collectTime += 1;
 				if (collectTime == 3) {
+					log.info("###### MESSAGE");
 					for (String dpId : collectedSws.keySet()) {
 						IOFSwitch ofSwitch = switchMap.get(dpId);
 						// flush cache region
@@ -155,7 +167,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						actions.add(ofSwitch.getOFFactory().actions().output(OFPort.CONTROLLER, 0xffFFffFF));
 						OFFlowAdd defaultFlow = ofSwitch.getOFFactory().buildFlowAdd()
 								.setTableId(TableId.of(1))
-								.setPriority(2)
+								.setPriority(1)
+								.setActions(actions)
 								.build();
 						ofSwitch.write(defaultFlow);
 					}
@@ -235,6 +248,9 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	@Override
 	public void init(FloodlightModuleContext context)
 			throws FloodlightModuleException {
+        messageDamper = new OFMessageDamper(10000,
+                EnumSet.of(OFType.FLOW_MOD),
+                250);
 		collectTime = 0;
 		collectedSws.put("00:00:00:00:00:00:00:03", 1);
 		collectedSws.put("00:00:00:00:00:00:00:04", 1);

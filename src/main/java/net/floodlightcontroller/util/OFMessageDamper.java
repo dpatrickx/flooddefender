@@ -21,6 +21,7 @@ import java.util.EnumSet;
 import java.util.Set;
 
 import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.statistics.StatisticsCollector;
 
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFType;
@@ -123,7 +124,7 @@ public class OFMessageDamper {
             sw.write(msg);
             return true;
         }
-        
+
         DamperEntry entry = new DamperEntry(msg, sw);
         if (cache.update(entry)) {
             // entry exists in cache. Dampening.
@@ -131,7 +132,7 @@ public class OFMessageDamper {
             return false; 
         } else {
             log.debug("Not dampening new msg {}", msg);
-            log.info("###### MESSAGE");
+    		log.info("MESSAGE");
             sw.write(msg);
             return true;
         }

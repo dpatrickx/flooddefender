@@ -69,11 +69,11 @@ def simpleTest(ip):
     h3.cmd('./normal.sh h3 400 &')
     pid3 = int(h3.cmd('echo $!'))
 
-    h2.cmd('python attack.py 2000 100 0.002 > cache/t1 &')
+    h2.cmd('python attack.py 2000 100 0.001 > cache/t1 &')
     pid2 = int(h2.cmd('echo $!'))
-    h4.cmd('python attack.py 2000 100 0.002 > cache/t2 &')
+    h4.cmd('python attack.py 2000 100 0.001 > cache/t2 &')
     pid4 = int(h4.cmd('echo $!'))
-    h6.cmd('python attack.py 2000 100 0.002 > cache/t3 &')
+    h6.cmd('python attack.py 2000 100 0.001 > cache/t3 &')
     pid6 = int(h6.cmd('echo $!'))
 
     # CLI
@@ -88,3 +88,4 @@ def simpleTest(ip):
 if __name__ == '__main__':
     setLogLevel('info')
     simpleTest(sys.argv[1])
+00

@@ -1,18 +1,15 @@
-cat $1 | grep "###### PACKET_REMOVED - 10.0.0.1;" > normal
-cat $1 | grep "###### PACKET_REMOVED - 10.0.0.11;" >> normal
-cat $1 | grep "###### PACKET_REMOVED - 10.0.0.2;" >> normal
-cat $1 | grep "###### PACKET_REMOVED - 10.0.0.12;" >> normal
-
-sort normal > temp
-cat temp | awk -F . '{print $1}' > normal
-
-b=`head -1 normal`
-e=`tail -1 normal`
+cat $1 | grep "###### MESSAGE" | awk -F . '{print $1}' | sort > temp
+b=`head -1 temp`
+e=`tail -1 temp`
+echo $b" "$e
 be=`date -d "$b" +%s`
 en=`date -d "$e" +%s`
 
-num=$(( $en-$be ))
-
-allFlowRemoved=`cat normal | awk 'END{print NR}'`
-
-python compute.py $allFlowRemoved $num
+i=$be
+while [ "$i" -le "$en" ]; do
+    t=`date -d @"$i"  "+%Y-%m-%d %H:%M:%S"`
+    # t=`date -d @"$i"  "+%H:%M:%S"`
+    num=`cat $1 | grep "$t" | awk 'END{print NR}'`
+    echo $num
+    i=$(($i+1))
+done
