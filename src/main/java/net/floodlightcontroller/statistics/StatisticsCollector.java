@@ -87,7 +87,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							else if (ip.toString().equals("10.0.0.2")) normalUser = true;
 							else if (ip.toString().equals("10.0.0.12")) normalUser = true;
 							if (normalUser) {
-								pkCount = 2;
+								roundJudge += 1;
+								if (roundJudge < 9) pkCount = 2;
 //								if (roundJudge >= 10) roundJudge = 1;
 							}
 						} catch (Exception ee) {
@@ -102,7 +103,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 							OFFlowAdd fmb = ofSwitch.getOFFactory().buildFlowAdd()
 							.setMatch(match)
-				            .setIdleTimeout(10)
+				            .setIdleTimeout(5)
 				            .setHardTimeout(Forwarding.FLOWMOD_DEFAULT_HARD_TIMEOUT)
 				            .setBufferId(OFBufferId.NO_BUFFER)
 				            .setCookie(pse.getCookie())
