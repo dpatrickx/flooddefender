@@ -509,7 +509,7 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 								if (aid.getType() == OFActionType.OUTPUT) { /* The assumption here is that OUTPUT includes the special port CONTROLLER... */
 									OFFlowAdd defaultFlow = this.factory.buildFlowAdd()
 											.setTableId(tid)
-											.setPriority(0)
+											.setPriority(1)
 											.setInstructions(Collections.singletonList((OFInstruction) this.factory.instructions().buildApplyActions().setActions(actions).build()))
 											.build();
 									flows.add(defaultFlow);
@@ -526,7 +526,7 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 					if (missCount < this.sw.getMaxTableForTableMissFlow().getValue()) { /* Only insert if we want it */
 						OFFlowAdd defaultFlow = this.factory.buildFlowAdd()
 								.setTableId(TableId.of(tid))
-								.setPriority(0)
+								.setPriority(1)
 								.setActions(actions)
 								.build();
 						flows.add(defaultFlow);
@@ -551,7 +551,7 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 		OFFlowAdd defaultFlow1 = this.factory.buildFlowAdd()
 				.setMatch(mb.build())
 			    .setTableId(TableId.of(0))
-			    .setPriority(1)
+			    .setPriority(2)
 			    .setInstructions(instructions)
 			    .setHardTimeout(0)
 			    .setIdleTimeout(0)
@@ -560,7 +560,7 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 		OFFlowAdd defaultFlow2 = this.factory.buildFlowAdd()
 				.setMatch(mb2.build())
 			    .setTableId(TableId.of(0))
-			    .setPriority(1)
+			    .setPriority(2)
 			    .setInstructions(instructions)
 			    .setHardTimeout(0)
 			    .setIdleTimeout(0)

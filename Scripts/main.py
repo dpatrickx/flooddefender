@@ -33,10 +33,7 @@ class MyTreeTopo( Topo ):
             self.hostNum += 1
         return node
 
-def simpleTest(ip, kind):
-    if kind not in ['normal', 'attack']:
-        print 'python of.py [ip] [normal/attack]'
-        return
+def simpleTest(ip):
     depth = 1
     topo = MyTreeTopo(depth = depth, fanout = 4)
     net = Mininet(topo=topo, switch=OVSSwitch,
@@ -62,13 +59,6 @@ def simpleTest(ip, kind):
     h2.cmd('ifconfig h2-eth1 up')
     h2.cmd('ifconfig h2-eth1 10.0.0.12 netmask 255.255.255.0')
 
-    if kind == 'normal':
-        Link(h3, net.switches[depth-1], intfName1='h3-eth1')
-        h3.cmd('ifconfig h3-eth1 down')
-        h3.cmd('ifconfig h3-eth1 hw ether 00:00:00:00:00:07')
-        h3.cmd('ifconfig h3-eth1 up')
-        h3.cmd('ifconfig h3-eth1 10.0.0.13 netmask 255.255.255.0')
-
     net.start()
     os.system('./limit.sh 300')
     # traffic generate
@@ -78,22 +68,23 @@ def simpleTest(ip, kind):
     h2.cmd('./normal.sh h2 400 &')
     pid2 = int(h2.cmd('echo $!'))
 
-    if kind == 'attack':
-        h3.cmd('python attack.py 2000 100 0.002 > tt &')
-    elif kind == 'normal':
-        h3.cmd('./normal.sh h3 200 &')
-    pid3 = int(h3.cmd('echo $!'))
+    h3.cmd('python attack.py 2000 100 0.002 > tt &')
+    pid30 = int(h3.cmd('echo $!'))
     h3.cmd('python attack.py 2000 100 0.002 > tt &')
     pid31 = int(h3.cmd('echo $!'))
+
+    h4.cmd('./getFlowTable.sh table &')
+    pid4 = int(h4.cmd('echo $!'))
 
     # CLI
     CLI(net)
     h1.cmd('kill -9 ', pid1)
     h2.cmd('kill -9 ', pid2)
-    h3.cmd('kill -9 ', pid3)
+    h3.cmd('kill -9 ', pid30)
     h3.cmd('kill -9 ', pid31)
+    h4.cmd('kill -9 ', pid4)
     net.stop()
 
 if __name__ == '__main__':
     setLogLevel('info')
-    simpleTest(sys.argv[1], sys.argv[2])
+    simpleTest(sys.argv[1])

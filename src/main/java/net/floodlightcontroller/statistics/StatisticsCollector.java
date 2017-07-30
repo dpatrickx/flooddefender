@@ -52,7 +52,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 
 	// flow entries statistic collecting configuration
 	private static boolean isEnabled = true;
-	public static int hostStatsInterval = 3;
+	public static int hostStatsInterval = 2;
+	public static int roundJudge = 0;
 	private static ScheduledFuture<?> hostStatsCollector;
 	public static IOFSwitch ofSwitch;
 	public static HashMap<Match, ActionEntry> matchCache = new HashMap<Match, ActionEntry>();
@@ -75,28 +76,50 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						Match match = pse.getMatch();
 						if (!matchCache.containsKey(match)) {
 							continue;
-						}
+						} else if (matchCache.get(match).passed == 1)
+							continue;
 						int pkCount = (int) pse.getPacketCount().getValue();
+						try {
+							IPv4Address ip = match.get(MatchField.IPV4_SRC);
+							boolean normalUser = false;
+							if (ip.toString().equals("10.0.0.1")) normalUser = true;
+							else if (ip.toString().equals("10.0.0.11")) normalUser = true;
+							else if (ip.toString().equals("10.0.0.2")) normalUser = true;
+							else if (ip.toString().equals("10.0.0.12")) normalUser = true;
+							if (normalUser) {
+								pkCount = 2;
+//								if (roundJudge >= 10) roundJudge = 1;
+							}
+						} catch (Exception ee) {
+							pkCount = 0;
+						}
+
 						if (pkCount > 1) {
 							OFPort port = matchCache.get(match).pass();
 							// move processing flow rule -> flow table region
-							OFFlowMod.Builder fmb = ofSwitch.getOFFactory().buildFlowAdd();
-							fmb.setMatch(match)
-				            .setIdleTimeout(Forwarding.FLOWMOD_DEFAULT_IDLE_TIMEOUT)
+			                Set<OFFlowModFlags> flags = new HashSet<>();
+			                flags.add(OFFlowModFlags.SEND_FLOW_REM);
+
+							OFFlowAdd fmb = ofSwitch.getOFFactory().buildFlowAdd()
+							.setMatch(match)
+				            .setIdleTimeout(10)
 				            .setHardTimeout(Forwarding.FLOWMOD_DEFAULT_HARD_TIMEOUT)
 				            .setBufferId(OFBufferId.NO_BUFFER)
 				            .setCookie(pse.getCookie())
 				            .setOutPort(port)
 				            .setTableId(TableId.of(0))
-				            .setPriority(Forwarding.FLOWMOD_DEFAULT_PRIORITY);
-							ofSwitch.write(fmb.build());
+				            .setPriority(3)
+				            .setFlags(flags)
+				            .build();
+
+							ofSwitch.write(fmb);
 						}
 					}
 				}
 			}
 			// entries judgment finished
 			collectTime += 1;
-			if (collectTime == 5) {
+			if (collectTime == 3) {
 				collectTime = 0;
 				matchCache.clear();
 				Forwarding.btree.clear();
@@ -105,6 +128,12 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 						.setTableId(TableId.of(1))
 						.build();
 				ofSwitch.write(deleteFlow);
+				OFFlowDelete deleteFlow0 = ofSwitch.getOFFactory().buildFlowDelete()
+						.setTableId(TableId.of(0))
+						.setCookie(U64.of(31))
+						.setCookieMask(U64.of(31))
+						.build();
+				ofSwitch.write(deleteFlow0);
 				// write default flow rule
 				ArrayList<OFAction> actions = new ArrayList<OFAction>(1);
 				actions.add(ofSwitch.getOFFactory().actions().output(OFPort.CONTROLLER, 0xffFFffFF));

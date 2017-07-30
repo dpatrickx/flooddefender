@@ -47,6 +47,7 @@ import net.floodlightcontroller.util.MatchUtils;
 import net.floodlightcontroller.util.OFDPAUtils;
 import net.floodlightcontroller.util.OFMessageDamper;
 
+import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
@@ -60,6 +61,7 @@ import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
 import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.MacAddress;
 import org.projectfloodlight.openflow.types.OFBufferId;
 import org.projectfloodlight.openflow.types.OFPort;
@@ -82,7 +84,7 @@ public abstract class ForwardingBase implements IOFMessageListener {
 
     protected static TableId FLOWMOD_DEFAULT_TABLE_ID = TableId.ZERO;
 
-    protected static boolean FLOWMOD_DEFAULT_SET_SEND_FLOW_REM_FLAG = false;
+    protected static boolean FLOWMOD_DEFAULT_SET_SEND_FLOW_REM_FLAG = true;
 
     protected static boolean FLOWMOD_DEFAULT_MATCH_IN_PORT = true;
     protected static boolean FLOWMOD_DEFAULT_MATCH_VLAN = true;
@@ -129,6 +131,7 @@ public abstract class ForwardingBase implements IOFMessageListener {
 
     protected void startUp() {
         floodlightProviderService.addOFMessageListener(OFType.PACKET_IN, this);
+        floodlightProviderService.addOFMessageListener(OFType.FLOW_REMOVED, this);
     }
 
     @Override
@@ -236,11 +239,9 @@ public abstract class ForwardingBase implements IOFMessageListener {
             aob.setMaxLen(Integer.MAX_VALUE);
             actions.add(aob.build());
 
-            if (FLOWMOD_DEFAULT_SET_SEND_FLOW_REM_FLAG || requestFlowRemovedNotification) {
-                Set<OFFlowModFlags> flags = new HashSet<>();
-                flags.add(OFFlowModFlags.SEND_FLOW_REM);
-                fmb.setFlags(flags);
-            }
+            Set<OFFlowModFlags> flags = new HashSet<>();
+            flags.add(OFFlowModFlags.SEND_FLOW_REM);
+            fmb.setFlags(flags);
 
             fmb.setMatch(mb.build())
             .setIdleTimeout(FLOWMOD_DEFAULT_IDLE_TIMEOUT)
@@ -282,6 +283,22 @@ public abstract class ForwardingBase implements IOFMessageListener {
             	// cache processing rules into hashmap
             	StatisticsCollector.matchCache.put(fmb.getMatch(), new ActionEntry(fmb.getOutPort()));
                 messageDamper.write(sw, fmb.build());
+                if (installKind == 2) {
+                	// install monitoring rule into table 0, priority = 0, that is, never matched by any traffic
+                	mb.setExact(MatchField.IPV4_SRC, IPv4Address.of("10.0.0.77"));
+                	OFFlowAdd defaultFlow = sw.getOFFactory().buildFlowAdd()
+                	.setMatch(mb.build())
+                    .setIdleTimeout(0)
+                    .setHardTimeout(FLOWMOD_DEFAULT_HARD_TIMEOUT)
+                    .setBufferId(OFBufferId.NO_BUFFER)
+                    .setOutPort(outPort)
+                    .setCookie(U64.of(31))
+                    .setPriority(0)
+                    .setFlags(flags)
+                    .setTableId(TableId.of(0))
+                    .build();
+                	sw.write(defaultFlow);
+                }
             }
 
             /* Push the packet out the first hop switch */

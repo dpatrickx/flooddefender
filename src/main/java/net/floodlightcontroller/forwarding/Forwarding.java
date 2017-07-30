@@ -72,6 +72,7 @@ import net.floodlightcontroller.util.ParseUtils;
 
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
 import org.projectfloodlight.openflow.protocol.OFFlowModCommand;
+import org.projectfloodlight.openflow.protocol.OFFlowRemoved;
 import org.projectfloodlight.openflow.protocol.OFGroupType;
 import org.projectfloodlight.openflow.protocol.OFMatchType;
 import org.projectfloodlight.openflow.protocol.OFMessage;
@@ -239,12 +240,12 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
 
     @Override
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
+    	Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
         switch (msg.getType()) {
             case PACKET_IN:
                 IRoutingDecision decision = null;
                 if (cntx != null) decision = RoutingDecision.rtStore.get(cntx, IRoutingDecision.CONTEXT_DECISION);
-                
-            	Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+
             	MacAddress srcMac = eth.getSourceMACAddress();
             	MacAddress dstMac = eth.getDestinationMACAddress();
             	String mac = "Mac:" + srcMac.toString() + "-" + dstMac.toString();
@@ -283,6 +284,13 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
                 	return this.processPacketInMessage(sw, (OFPacketIn) msg, decision, cntx, 2);
                 }
             case FLOW_REMOVED:
+            	try {
+            		OFFlowRemoved flowRemoved = (OFFlowRemoved) msg;
+            		IPv4Address ip = flowRemoved.getMatch().get(MatchField.IPV4_SRC);
+                    log.info("###### PACKET_REMOVED - {};", ip.toString());
+            	} catch (Exception e) {
+            		log.info("$$$$$$$$$$$");
+            	}
             default:
                 break;
         }
@@ -305,7 +313,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
                 return Command.CONTINUE;
             case FORWARD_OR_FLOOD:
             case FORWARD:
-                doForwardFlow(sw, pi, decision, cntx, false, installKind);
+                doForwardFlow(sw, pi, decision, cntx, true, installKind);
                 return Command.CONTINUE;
             case MULTICAST:
                 // treat as broadcast
@@ -326,7 +334,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
             if (eth.isBroadcast() || eth.isMulticast()) {
                 doFlood(sw, pi, decision, cntx);
             } else {
-                doForwardFlow(sw, pi, decision, cntx, false, installKind);
+                doForwardFlow(sw, pi, decision, cntx, true, installKind);
             }
         }
 
