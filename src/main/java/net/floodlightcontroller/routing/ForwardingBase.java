@@ -70,6 +70,8 @@ import org.projectfloodlight.openflow.types.U64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.sun.javafx.css.Rule;
+
 /**
  * Abstract base class for implementing a forwarding module.  Forwarding is
  * responsible for programming flows to a switch in response to a policy
@@ -80,7 +82,7 @@ public abstract class ForwardingBase implements IOFMessageListener {
 
     public static int FLOWMOD_DEFAULT_IDLE_TIMEOUT = 5; // in seconds
     public static int FLOWMOD_DEFAULT_HARD_TIMEOUT = 0; // infinite
-    public static int FLOWMOD_DEFAULT_PRIORITY = 1; // 0 is the default table-miss flow in OF1.3+, so we need to use 1
+    public static int FLOWMOD_DEFAULT_PRIORITY = 3; // 0 is the default table-miss flow in OF1.3+, so we need to use 1
 
     protected static TableId FLOWMOD_DEFAULT_TABLE_ID = TableId.ZERO;
 
@@ -151,7 +153,7 @@ public abstract class ForwardingBase implements IOFMessageListener {
      *            Any decision made by a policy engine
      */
     public abstract Command processPacketInMessage(IOFSwitch sw, OFPacketIn pi, 
-            IRoutingDecision decision, FloodlightContext cntx, int kind);
+            IRoutingDecision decision, FloodlightContext cntx, int kind, String logKey);
 
     @Override
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
@@ -162,7 +164,7 @@ public abstract class ForwardingBase implements IOFMessageListener {
                 decision = RoutingDecision.rtStore.get(cntx, IRoutingDecision.CONTEXT_DECISION);
             }
 
-            return this.processPacketInMessage(sw, (OFPacketIn) msg, decision, cntx, 1);
+            return this.processPacketInMessage(sw, (OFPacketIn) msg, decision, cntx, 1, "");
         default:
             break;
         }
@@ -185,7 +187,7 @@ public abstract class ForwardingBase implements IOFMessageListener {
      */
     public boolean pushRoute(Path route, Match match, OFPacketIn pi,
             DatapathId pinSwitch, U64 cookie, FloodlightContext cntx,
-            boolean requestFlowRemovedNotification, OFFlowModCommand flowModCommand, int installKind) {
+            boolean requestFlowRemovedNotification, OFFlowModCommand flowModCommand, int installKind, String logKey) {
 
         boolean packetOutSent = false;
 
@@ -258,8 +260,16 @@ public abstract class ForwardingBase implements IOFMessageListener {
                 fmb.setTableId(FLOWMOD_DEFAULT_TABLE_ID);
             }
             
+            // only install rule in cache region in edge switch
             if (installKind == 2) {
-            	fmb.setTableId(TableId.of(1));
+            	if (indx < 2) {
+            		fmb.setTableId(TableId.of(1));
+            		if (!StatisticsCollector.collectedSws.containsKey(sw.getId().toString())) {
+            			log.info("###### INSTALL INTO WRONG SW, {}, {}", logKey, route.getPath().toString());
+            		}
+            	} else {
+            		fmb.setTableId(TableId.of(0));
+            	}
             }
                         
             if (log.isTraceEnabled()) {

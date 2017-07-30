@@ -28,7 +28,7 @@ def senior(dst_ip, dst_port, pkt_size=100, idle=10):
 # Using random port to send UDP packets to (10.0.0.3/4/5/6/7/8, port 2000,2001,...20000)
 # per packet size = 100bytes, interval per packet = 0.05s
 def send_udp(dst_ip, dst_port, pkt_size=100, inter=0.05):
-    src_port = dst_port
+    src_port = RandShort()
     udp_pkt = IP(dst=dst_ip) / UDP(sport=src_port, dport=dst_port)
     if len(udp_pkt) < pkt_size:
         udp_pkt = udp_pkt / Raw(RandString(size=pkt_size-20))
@@ -112,8 +112,7 @@ def ping(host, count=1):
 
 def main(num, size, inter):
     for i in range(0, 100000):
-        # send_tcp(dst_ip='10.0.0.3', dst_port=(10, 9+int(num)), pkt_size=int(size), inter=float(inter))
-        send_udp(dst_ip='10.0.0.4', dst_port=(10, 9+int(num)), pkt_size=int(size), inter=float(inter))
+        send_udp(dst_ip='10.0.0.8', dst_port=(10, 9+int(num)), pkt_size=int(size), inter=float(inter))
 
 if __name__ == '__main__':
     main(sys.argv[1], sys.argv[2], sys.argv[3])

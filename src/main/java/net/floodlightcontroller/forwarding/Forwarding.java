@@ -269,11 +269,11 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
                 		TransportPort dstPort = udp.getDestinationPort();
                 		String port = "Port:" + srcPort.toString() + "-" + dstPort.toString();
                 		key = "UDP" + mac + ", " + ip + ", " + port;
+                	} else {
+                		return this.processPacketInMessage(sw, (OFPacketIn) msg, decision, cntx, 1, key);
                 	}
-                } else if (eth.getEtherType() == EthType.ARP) {
-                	key = "ARP" + mac;
                 } else {
-                	return this.processPacketInMessage(sw, (OFPacketIn) msg, decision, cntx, 1);                	
+                	return this.processPacketInMessage(sw, (OFPacketIn) msg, decision, cntx, 1, key);                	
                 }
                 roundChoose = 1 - roundChoose;
                 if (!Forwarding.btree.containsKey(key) && roundChoose == 1) {
@@ -283,7 +283,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
                 } else {
                 	btree.put(key, 2);
                 	log.debug("###### CACHE PASSED!!!!!!!!!");
-                	return this.processPacketInMessage(sw, (OFPacketIn) msg, decision, cntx, 2);
+                	return this.processPacketInMessage(sw, (OFPacketIn) msg, decision, cntx, 2, key);
                 }
             case FLOW_REMOVED:
             	try {
@@ -291,7 +291,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
             		IPv4Address ip = flowRemoved.getMatch().get(MatchField.IPV4_SRC);
                     log.debug("###### PACKET_REMOVED - {};", ip.toString());
             	} catch (Exception e) {
-            		log.info("$$$$$$$$$$$");
+//            		log.info("$$$$$$$$$$$");
             	}
             default:
                 break;
@@ -300,7 +300,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
     }
 
     @Override
-    public Command processPacketInMessage(IOFSwitch sw, OFPacketIn pi, IRoutingDecision decision, FloodlightContext cntx, int installKind) {
+    public Command processPacketInMessage(IOFSwitch sw, OFPacketIn pi, IRoutingDecision decision, FloodlightContext cntx, int installKind, String logKey) {
         Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
         
         // We found a routing decision (i.e. Firewall is enabled... it's the only thing that makes RoutingDecisions)
@@ -315,7 +315,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
                 return Command.CONTINUE;
             case FORWARD_OR_FLOOD:
             case FORWARD:
-                doForwardFlow(sw, pi, decision, cntx, true, installKind);
+                doForwardFlow(sw, pi, decision, cntx, true, installKind, logKey);
                 return Command.CONTINUE;
             case MULTICAST:
                 // treat as broadcast
@@ -336,7 +336,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
             if (eth.isBroadcast() || eth.isMulticast()) {
                 doFlood(sw, pi, decision, cntx);
             } else {
-                doForwardFlow(sw, pi, decision, cntx, true, installKind);
+                doForwardFlow(sw, pi, decision, cntx, true, installKind, logKey);
             }
         }
 
@@ -486,7 +486,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
         log.debug("OFMessage dampened: {}", dampened);
     }
 
-    protected void doForwardFlow(IOFSwitch sw, OFPacketIn pi, IRoutingDecision decision, FloodlightContext cntx, boolean requestFlowRemovedNotifn, int installKind) {
+    protected void doForwardFlow(IOFSwitch sw, OFPacketIn pi, IRoutingDecision decision, FloodlightContext cntx, boolean requestFlowRemovedNotifn, int installKind, String logKey) {
         OFPort srcPort = OFMessageUtils.getInPort(pi);
         DatapathId srcSw = sw.getId();
         IDevice dstDevice = IDeviceService.fcStore.get(cntx, IDeviceService.CONTEXT_DST_DEVICE);
@@ -542,7 +542,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
                 dstAp = ap;
                 break;
             }
-        }	
+        }
 
         /* 
          * This should only happen (perhaps) when the controller is
@@ -557,29 +557,11 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
             return; 
         }
 
+        /* Validate that the source and destination are not on the same switch port */
         if (sw.getId().equals(dstAp.getNodeId()) && srcPort.equals(dstAp.getPortId())) {
-        	if (srcIp != null) {
-        		if (srcIp.toString().equals("10.0.0.11"))
-        			dstAp.setPortId(OFPort.of(1));
-        		else if (srcIp.toString().equals("10.0.0.13"))
-        			dstAp.setPortId(OFPort.of(3));
-        		else if (srcIp.toString().equals("10.0.0.12"))
-        			dstAp.setPortId(OFPort.of(2));
-        		if (sw.getId().equals(dstAp.getNodeId()) && srcPort.equals(dstAp.getPortId())) {
-        			log.info("######SAME_GROUP-{}-", srcIp.toString());
-        			return;
-        		}
-        	} else {
-        		log.info("######SAME_GROUP-NULL-");
-        		return;
-        	}
-        }
-        
-//        /* Validate that the source and destination are not on the same switch port */
-//        if (sw.getId().equals(dstAp.getNodeId()) && srcPort.equals(dstAp.getPortId())) {
-//            log.info("Both source and destination are on the same switch/port {}/{}. Dropping packet", sw.toString(), srcPort);
-//            return;
-//        }			
+            log.info("###### Both source and destination are on the same switch/port {}/{}. Dropping packet", sw.toString(), srcPort);
+            return;
+        }			
 
         U64 flowSetId = flowSetIdRegistry.generateFlowSetId();
         U64 cookie = makeForwardingCookie(decision, flowSetId);
@@ -602,7 +584,7 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
 
             pushRoute(path, m, pi, sw.getId(), cookie, 
                     cntx, requestFlowRemovedNotifn,
-                    OFFlowModCommand.ADD, installKind);	
+                    OFFlowModCommand.ADD, installKind, logKey);
             
             /* 
              * Register this flowset with ingress and egress ports for link down

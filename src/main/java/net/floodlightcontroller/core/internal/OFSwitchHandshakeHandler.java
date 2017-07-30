@@ -481,7 +481,8 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 		 * Only for OF1.3+, insert the default forward-to-controller flow for
 		 * each table. This is priority=0 with no Match.
 		 */
-		StatisticsCollector.ofSwitch = this.sw;
+		StatisticsCollector.switchMap.put(sw.getId().toString(), sw);
+		log.info("###### ADD SW {}", sw.getId().toString());
 		if (this.sw.getOFFactory().getVersion().compareTo(OFVersion.OF_13) >= 0) {
 			/*
 			 * Remove the default flow if it's present.

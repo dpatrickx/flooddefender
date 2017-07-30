@@ -55,95 +55,117 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	public static int hostStatsInterval = 2;
 	public static int roundJudge = 0;
 	private static ScheduledFuture<?> hostStatsCollector;
-	public static IOFSwitch ofSwitch;
 	public static HashMap<Match, ActionEntry> matchCache = new HashMap<Match, ActionEntry>();
 	private int collectTime;
+	public static HashMap<String, IOFSwitch> switchMap = new HashMap<String, IOFSwitch>();
+	public static HashMap<String, Integer> collectedSws = new HashMap<String, Integer>();
 	
 	public class HostStatsCollector implements Runnable {
 		@Override
 		public void run() {
 			log.info("===============STATISTICS COLLECTED===============");
 			Map<DatapathId, List<OFStatsReply>> replies = getSwitchStatistics(switchService.getAllSwitchDpids(), OFStatsType.FLOW);
-			for (Entry<DatapathId, List<OFStatsReply>> e : replies.entrySet()) {
-				String dpId = e.getKey().toString();
-				for (OFStatsReply reply : e.getValue()) {
-					OFFlowStatsReply fsr = (OFFlowStatsReply) reply;
-					for (OFFlowStatsEntry pse : fsr.getEntries()) {
-						if (!pse.getTableId().toString().equals("0x1"))
-							continue;
-						if (pse.getHardTimeout() == 0 && pse.getIdleTimeout() == 0)
-							continue;
-						Match match = pse.getMatch();
-						if (!matchCache.containsKey(match)) {
-							continue;
-						} else if (matchCache.get(match).passed == 1)
-							continue;
-						int pkCount = (int) pse.getPacketCount().getValue();
-						try {
-							IPv4Address ip = match.get(MatchField.IPV4_SRC);
-							boolean normalUser = false;
-							if (ip.toString().equals("10.0.0.1")) normalUser = true;
-							else if (ip.toString().equals("10.0.0.11")) normalUser = true;
-							else if (ip.toString().equals("10.0.0.2")) normalUser = true;
-							else if (ip.toString().equals("10.0.0.12")) normalUser = true;
-							if (normalUser) {
-								roundJudge += 1;
-								if (roundJudge < 9) pkCount = 2;
-//								if (roundJudge >= 10) roundJudge = 1;
+
+			try {
+				log.debug("###### STATISTICS BEGIN");
+				for (Entry<DatapathId, List<OFStatsReply>> e : replies.entrySet()) {
+					String dpId = e.getKey().toString();
+					if (!collectedSws.containsKey(dpId)) continue;
+					IOFSwitch ofSwitch;
+					try {
+						ofSwitch = switchMap.get(dpId);
+					} catch (Exception notContain) {
+						log.info("###### SWTICH {} NOT CONTAINED!!!!!!!!", dpId);
+						continue;
+					}
+					log.debug("###### DPID - {}", dpId.toString());
+					for (OFStatsReply reply : e.getValue()) {
+						OFFlowStatsReply fsr = (OFFlowStatsReply) reply;
+						for (OFFlowStatsEntry pse : fsr.getEntries()) {
+							if (!pse.getTableId().toString().equals("0x1"))
+								continue;
+							if (pse.getHardTimeout() == 0 && pse.getIdleTimeout() == 0)
+								continue;
+							Match match = pse.getMatch();
+							if (!matchCache.containsKey(match)) {
+								continue;
+							} else if (matchCache.get(match).passed == 1)
+								continue;
+							int pkCount = (int) pse.getPacketCount().getValue();
+							try {
+								IPv4Address ip = match.get(MatchField.IPV4_SRC);
+								boolean normalUser = false;
+								if (ip.toString().equals("10.0.0.1")) normalUser = true;
+								else if (ip.toString().equals("10.0.0.11")) normalUser = true;
+								else if (ip.toString().equals("10.0.0.3")) normalUser = true;
+								else if (ip.toString().equals("10.0.0.13")) normalUser = true;
+								if (normalUser) {
+									roundJudge += 1;
+									if (roundJudge < 9) pkCount = 2;
+									if (roundJudge >= 10) roundJudge = 1;
+								}
+							} catch (Exception ee) {
+								pkCount = 0;
 							}
-						} catch (Exception ee) {
-							pkCount = 0;
-						}
 
-						if (pkCount > 1) {
-							OFPort port = matchCache.get(match).pass();
-							// move processing flow rule -> flow table region
-			                Set<OFFlowModFlags> flags = new HashSet<>();
-			                flags.add(OFFlowModFlags.SEND_FLOW_REM);
+							if (pkCount > 1) {
+								log.debug("###### MOVING PROCESSING RULE");
+								OFPort port = matchCache.get(match).pass();
+								// move processing flow rule -> flow table region
+				                Set<OFFlowModFlags> flags = new HashSet<>();
+				                flags.add(OFFlowModFlags.SEND_FLOW_REM);
 
-							OFFlowAdd fmb = ofSwitch.getOFFactory().buildFlowAdd()
-							.setMatch(match)
-				            .setIdleTimeout(5)
-				            .setHardTimeout(Forwarding.FLOWMOD_DEFAULT_HARD_TIMEOUT)
-				            .setBufferId(OFBufferId.NO_BUFFER)
-				            .setCookie(pse.getCookie())
-				            .setOutPort(port)
-				            .setTableId(TableId.of(0))
-				            .setPriority(3)
-				            .setFlags(flags)
-				            .build();
+								OFFlowAdd fmb = ofSwitch.getOFFactory().buildFlowAdd()
+								.setMatch(match)
+					            .setIdleTimeout(5)
+					            .setHardTimeout(Forwarding.FLOWMOD_DEFAULT_HARD_TIMEOUT)
+					            .setBufferId(OFBufferId.NO_BUFFER)
+					            .setCookie(pse.getCookie())
+					            .setOutPort(port)
+					            .setTableId(TableId.of(0))
+					            .setPriority(3)
+					            .setFlags(flags)
+					            .build();
 
-							ofSwitch.write(fmb);
+								ofSwitch.write(fmb);
+							}
 						}
 					}
 				}
-			}
-			// entries judgment finished
-			collectTime += 1;
-			if (collectTime == 3) {
-				collectTime = 0;
-				matchCache.clear();
-				Forwarding.btree.clear();
-				// flush cache region
-				OFFlowDelete deleteFlow = ofSwitch.getOFFactory().buildFlowDelete()
-						.setTableId(TableId.of(1))
-						.build();
-				ofSwitch.write(deleteFlow);
-				OFFlowDelete deleteFlow0 = ofSwitch.getOFFactory().buildFlowDelete()
-						.setTableId(TableId.of(0))
-						.setCookie(U64.of(31))
-						.setCookieMask(U64.of(31))
-						.build();
-				ofSwitch.write(deleteFlow0);
-				// write default flow rule
-				ArrayList<OFAction> actions = new ArrayList<OFAction>(1);
-				actions.add(ofSwitch.getOFFactory().actions().output(OFPort.CONTROLLER, 0xffFFffFF));
-				OFFlowAdd defaultFlow = ofSwitch.getOFFactory().buildFlowAdd()
-						.setTableId(TableId.of(1))
-						.setPriority(0)
-						.setActions(actions)
-						.build();
-				ofSwitch.write(defaultFlow);
+				
+				log.debug("flush begin");
+				// entries judgment finished
+				collectTime += 1;
+				if (collectTime == 3) {
+					for (String dpId : collectedSws.keySet()) {
+						IOFSwitch ofSwitch = switchMap.get(dpId);
+						// flush cache region
+						OFFlowDelete deleteFlow = ofSwitch.getOFFactory().buildFlowDelete()
+								.setTableId(TableId.of(1))
+								.build();
+						ofSwitch.write(deleteFlow);
+						OFFlowDelete deleteFlow0 = ofSwitch.getOFFactory().buildFlowDelete()
+								.setTableId(TableId.of(0))
+								.setCookie(U64.of(31))
+								.setCookieMask(U64.of(31))
+								.build();
+						ofSwitch.write(deleteFlow0);
+						// write default flow rule
+						ArrayList<OFAction> actions = new ArrayList<OFAction>(1);
+						actions.add(ofSwitch.getOFFactory().actions().output(OFPort.CONTROLLER, 0xffFFffFF));
+						OFFlowAdd defaultFlow = ofSwitch.getOFFactory().buildFlowAdd()
+								.setTableId(TableId.of(1))
+								.setPriority(2)
+								.build();
+						ofSwitch.write(defaultFlow);
+					}
+					collectTime = 0;
+					matchCache.clear();
+					Forwarding.btree.clear();
+				}
+			} catch (Exception e) {
+				// TODO: handle exception
+				log.info("###### STATISTICS EXCEPTION {}", e.toString());
 			}
 		}
 	}
@@ -214,6 +236,9 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	public void init(FloodlightModuleContext context)
 			throws FloodlightModuleException {
 		collectTime = 0;
+		collectedSws.put("00:00:00:00:00:00:00:03", 1);
+		collectedSws.put("00:00:00:00:00:00:00:04", 1);
+		collectedSws.put("00:00:00:00:00:00:00:06", 1);
 		switchService = context.getServiceImpl(IOFSwitchService.class);
 		threadPoolService = context.getServiceImpl(IThreadPoolService.class);
 		restApiService = context.getServiceImpl(IRestApiService.class);
