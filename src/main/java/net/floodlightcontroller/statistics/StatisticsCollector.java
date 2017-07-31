@@ -117,8 +117,8 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 								log.debug("###### MOVING PROCESSING RULE");
 								OFPort port = matchCache.get(match).pass();
 								// move processing flow rule -> flow table region
-				                Set<OFFlowModFlags> flags = new HashSet<>();
-				                flags.add(OFFlowModFlags.SEND_FLOW_REM);
+//				                Set<OFFlowModFlags> flags = new HashSet<>();
+//				                flags.add(OFFlowModFlags.SEND_FLOW_REM);
 
 				                List<OFAction> actions = new ArrayList<OFAction>();	
 				                OFActionOutput.Builder aob = ofSwitch.getOFFactory().actions().buildOutput();
@@ -136,7 +136,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 					            .setOutPort(port)
 					            .setTableId(TableId.of(0))
 					            .setPriority(3)
-					            .setFlags(flags)
+//					            .setFlags(flags)
 					            .build();
 								messageDamper.write(ofSwitch, fmb);
 							}
