@@ -566,7 +566,7 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 			    .setHardTimeout(0)
 			    .setIdleTimeout(0)
 			    .build();
-		
+
 		this.sw.write(defaultFlow1);
 		this.sw.write(defaultFlow2);
 	}

@@ -148,20 +148,19 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 				// entries judgment finished
 				collectTime += 1;
 				if (collectTime == 3) {
-					log.info("###### MESSAGE");
 					for (String dpId : collectedSws.keySet()) {
 						IOFSwitch ofSwitch = switchMap.get(dpId);
 						// flush cache region
 						OFFlowDelete deleteFlow = ofSwitch.getOFFactory().buildFlowDelete()
 								.setTableId(TableId.of(1))
 								.build();
-						ofSwitch.write(deleteFlow);
+						messageDamper.write(ofSwitch, deleteFlow);
 						OFFlowDelete deleteFlow0 = ofSwitch.getOFFactory().buildFlowDelete()
 								.setTableId(TableId.of(0))
 								.setCookie(U64.of(31))
 								.setCookieMask(U64.of(31))
 								.build();
-						ofSwitch.write(deleteFlow0);
+						messageDamper.write(ofSwitch, deleteFlow0);
 						// write default flow rule
 						ArrayList<OFAction> actions = new ArrayList<OFAction>(1);
 						actions.add(ofSwitch.getOFFactory().actions().output(OFPort.CONTROLLER, 0xffFFffFF));
@@ -170,7 +169,7 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 								.setPriority(1)
 								.setActions(actions)
 								.build();
-						ofSwitch.write(defaultFlow);
+						messageDamper.write(ofSwitch, defaultFlow);
 					}
 					collectTime = 0;
 					matchCache.clear();

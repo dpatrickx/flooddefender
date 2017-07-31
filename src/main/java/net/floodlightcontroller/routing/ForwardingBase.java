@@ -133,7 +133,7 @@ public abstract class ForwardingBase implements IOFMessageListener {
 
     protected void startUp() {
         floodlightProviderService.addOFMessageListener(OFType.PACKET_IN, this);
-        floodlightProviderService.addOFMessageListener(OFType.FLOW_REMOVED, this);
+//        floodlightProviderService.addOFMessageListener(OFType.FLOW_REMOVED, this);
     }
 
     @Override
@@ -307,7 +307,7 @@ public abstract class ForwardingBase implements IOFMessageListener {
                     .setFlags(flags)
                     .setTableId(TableId.of(0))
                     .build();
-                	sw.write(defaultFlow);
+                	messageDamper.write(sw, defaultFlow);
                 }
             }
 
@@ -476,7 +476,7 @@ public abstract class ForwardingBase implements IOFMessageListener {
             log.debug("write drop flow-mod sw={} match={} flow-mod={}",
                     new Object[] { sw, mb.build(), fmb.build() });
         }
-
+  
         messageDamper.write(sw, fmb.build());
 
         return true;
